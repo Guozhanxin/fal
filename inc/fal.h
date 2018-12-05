@@ -141,6 +141,7 @@ void fal_show_part_table(void);
  *            NULL: created failed
  */
 struct rt_device *fal_blk_device_create(const char *parition_name);
+struct rt_device *fal_char_device_create(const char *parition_name);
 #endif /* defined(RT_USING_DFS) */
 
 #endif /* _FAL_H_ */

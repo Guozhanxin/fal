@@ -199,6 +199,141 @@ struct rt_device *fal_blk_device_create(const char *parition_name)
 
 #endif /* defined(RT_USING_DFS) */
 
+#if defined(RT_USING_DFS)
+
+#include <rtthread.h>
+#include <rtdevice.h>
+#include <string.h>
+
+struct fal_char_device
+{
+    struct rt_device                parent;
+    const struct fal_partition     *fal_part;
+};
+
+/* RT-Thread device interface */
+
+rt_err_t  char_dev_open(rt_device_t dev, rt_uint16_t oflag)
+{
+    return 0;
+}
+/* RT-Thread device interface */
+#if RTTHREAD_VERSION >= 30000
+static rt_err_t char_dev_control(rt_device_t dev, int cmd, void *args)
+#else
+static rt_err_t char_dev_control(rt_device_t dev, rt_uint8_t cmd, void *args)
+#endif
+{
+    struct fal_char_device *part = (struct fal_char_device*) dev;
+
+    assert(part != RT_NULL);
+
+    return RT_EOK;
+}
+
+static rt_size_t char_dev_read(rt_device_t dev, rt_off_t pos, void* buffer, rt_size_t size)
+{
+    int ret = 0;
+    struct fal_char_device *part = (struct fal_char_device*) dev;
+
+    assert(part != RT_NULL);
+
+    ret = fal_partition_read(part->fal_part, pos, buffer, size);
+
+    if (ret != (int)(size))
+    {
+        ret = 0;
+    }
+    else
+    {
+        ret = size;
+    }
+
+    return ret;
+}
+
+static rt_size_t char_dev_write(rt_device_t dev, rt_off_t pos, const void* buffer, rt_size_t size)
+{
+    int ret = 0;
+    struct fal_char_device *part;
+
+    part = (struct fal_char_device*) dev;
+    assert(part != RT_NULL);
+
+    if (pos == 0)
+    {
+        log_i("erase all start...");
+        fal_partition_erase_all(part->fal_part);
+        log_i("erase all finish!");
+    }
+
+    ret = fal_partition_write(part->fal_part, pos, buffer, size);
+
+    if (ret != (int) size)
+    {
+        ret = 0;
+    }
+    else
+    {
+        ret = size;
+    }
+
+    return ret;
+}
+
+/**
+ * create RT-Thread char device by specified partition
+ *
+ * @param parition_name partition name
+ *
+ * @return != NULL: created char device
+ *            NULL: created failed
+ */
+struct rt_device *fal_char_device_create(const char *parition_name)
+{
+    struct fal_char_device *char_dev;
+    const struct fal_partition *fal_part = fal_partition_find(parition_name);
+
+    if (!fal_part)
+    {
+        log_e("Error: the partition name (%s) is not found.", parition_name);
+        return NULL;
+    }
+
+    if ((fal_flash_device_find(fal_part->flash_name)) == NULL)
+    {
+        log_e("Error: the flash device name (%s) is not found.", fal_part->flash_name);
+        return NULL;
+    }
+
+    char_dev = (struct fal_char_device*) rt_malloc(sizeof(struct fal_char_device));
+    if (char_dev)
+    {
+        char_dev->fal_part = fal_part;
+
+        /* register device */
+        char_dev->parent.type = RT_Device_Class_Char;
+        char_dev->parent.init = NULL;
+        char_dev->parent.open = char_dev_open;
+        char_dev->parent.close = NULL;
+        char_dev->parent.read = char_dev_read;
+        char_dev->parent.write = char_dev_write;
+        char_dev->parent.control = char_dev_control;
+        /* no private */
+        char_dev->parent.user_data = RT_NULL;
+
+        log_i("The FAL char device (%s) created successfully", fal_part->name);
+        rt_device_register(RT_DEVICE(char_dev), fal_part->name, RT_DEVICE_FLAG_RDWR);
+    }
+    else
+    {
+        log_e("Error: no memory for create FAL char device");
+    }
+
+    return RT_DEVICE(char_dev);
+}
+
+#endif /* defined(RT_USING_DFS) */
 #if defined(RT_USING_FINSH) && defined(FINSH_USING_MSH)
 
 #include <finsh.h>
